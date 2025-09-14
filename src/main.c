@@ -15,7 +15,7 @@
 #define PORT "443"
 
 #define RESP_BUFF_LEN 65536
-char buffer[RESP_BUFF_LEN];
+static char buffer[RESP_BUFF_LEN] = {0};
 
 int main(void) {
     const char *host = HOST;
@@ -133,7 +133,6 @@ int main(void) {
     ssize_t bytes_received = SSL_read(ssl, buffer, sizeof(buffer) - 1);
     if (bytes_received > 0) {
         nob_log(INFO, "Received %ld bytes", bytes_received);
-        buffer[bytes_received] = '\0';
         printf("Response:\n%s\n", buffer);
     } else {
         nob_log(INFO, "Received %ld bytes", bytes_received);
