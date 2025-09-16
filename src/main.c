@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -9,6 +10,10 @@
 #define NOB_STRIP_PREFIX
 #include "nob.h"
 
+#define SPF_ATTR_NAME "I-SP02/DIA/CT-01/AVERAGECHARGE"
+#define R1_ATTR_NAME  "R1-101S/DIA/DCCT-01/CURRENT"
+#define R3_ATTR_NAME  "R3-319S2/DIA/DCCT-01/CURRENT"
+
 #define HOST "status.maxiv.lu.se"
 #define PATH "/stream"
 #define URL "https://"HOST PATH
@@ -17,37 +22,55 @@
 #define RESP_BUFF_LEN 65536
 static char buffer[RESP_BUFF_LEN] = {0};
 
+#ifndef DEBUG
+    #define nob_log(...)
+#endif
+
+bool init_openssl(SSL_CTX **ctx) {
+    SSL_library_init();
+    SSL_load_error_strings();
+    OpenSSL_add_all_algorithms();
+
+    // Create SSL context
+    const SSL_METHOD *method = TLS_client_method();
+    *ctx = SSL_CTX_new(method);
+    if (!(*ctx)) {
+        nob_log(ERROR, "Unable to create SSL context");
+        ERR_print_errors_fp(stderr);
+        return false;
+    }
+    return true;
+}
+
 int main(void) {
+    int result = 0;
     const char *host = HOST;
+    struct addrinfo *addr = NULL;
+    SSL *ssl = NULL;
+    SSL_CTX *ctx = NULL;
 
     int client_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (client_fd < 0) {
         nob_log(ERROR, "Socket creation error");
-        return 1;
+        return_defer(1);
     }
 
     struct addrinfo hints = {
-        .ai_flags = AI_NUMERICHOST | AI_CANONNAME,
+        .ai_flags = 0 | AI_CANONNAME,
         .ai_family = AF_INET,
         .ai_socktype = SOCK_STREAM,
         .ai_protocol = IPPROTO_TCP,
     };
 
-    struct addrinfo *addr = NULL;
-
     int retval = getaddrinfo(host, PORT, &hints, &addr);
-    if (retval == EAI_NONAME) {
-        hints.ai_flags = 0 | AI_CANONNAME;
-        retval = getaddrinfo(host, PORT, &hints, &addr);
-    }
 
     if (retval != 0) {
         nob_log(ERROR, "Couldn't get IP info on the URL: %s", host);
-        return 1;
+        return_defer(1);
     }
 
     char ip_str[NI_MAXHOST];
-    int result = getnameinfo(
+    int gni_result = getnameinfo(
         addr->ai_addr,
         addr->ai_addrlen,
         ip_str,
@@ -57,38 +80,25 @@ int main(void) {
         NI_NUMERICHOST
     );
 
-    if (result != 0) {
+    if (gni_result != 0) {
         nob_log(ERROR, "Could not get IP string from URL info");
-        freeaddrinfo(addr);
-        return 1;
+        return_defer(1);
     }
 
     nob_log(INFO, "IP address of %s is %s", host, ip_str);
 
     // Initialize OpenSSL
-    SSL_library_init();
-    SSL_load_error_strings();
-    OpenSSL_add_all_algorithms();
-
-    // Create SSL context
-    const SSL_METHOD *method = TLS_client_method();
-    SSL_CTX *ctx = SSL_CTX_new(method);
-    if (!ctx) {
-        nob_log(ERROR, "Unable to create SSL context");
-        ERR_print_errors_fp(stderr);
-        return 1;
-    }
+    if (!init_openssl(&ctx)) return_defer(1);
 
     if (connect(client_fd, addr->ai_addr, addr->ai_addrlen) < 0) {
         nob_log(ERROR, "Unable to connect to %s (%s)", host, ip_str);
-        freeaddrinfo(addr);
-        return 1;
+        return_defer(1);
     }
 
     nob_log(INFO, "Connected successfully to %s (%s)", host, ip_str);
 
     // Create SSL connection
-    SSL *ssl = SSL_new(ctx);
+    ssl = SSL_new(ctx);
     SSL_set_fd(ssl, client_fd);
 
     // Set hostname for SNI (Server Name Indication)
@@ -98,11 +108,7 @@ int main(void) {
     if (SSL_connect(ssl) <= 0) {
         nob_log(ERROR, "SSL connection failed");
         ERR_print_errors_fp(stderr);
-        SSL_free(ssl);
-        freeaddrinfo(addr);
-        SSL_CTX_free(ctx);
-        close(client_fd);
-        return 1;
+        return_defer(1);
     }
 
     nob_log(INFO, "SSL connection established successfully");
@@ -121,25 +127,34 @@ int main(void) {
     if (SSL_write(ssl, http_request, strlen(http_request)) <= 0) {
         nob_log(ERROR, "Failed to send HTTPS request");
         ERR_print_errors_fp(stderr);
-        SSL_free(ssl);
-        freeaddrinfo(addr);
-        SSL_CTX_free(ctx);
-        close(client_fd);
-        return 1;
+        return_defer(1);
     }
 
     nob_log(INFO, "Sent data to %s (%s)", host, ip_str);
 
+    int try_counter = 0;
     ssize_t bytes_received = SSL_read(ssl, buffer, sizeof(buffer) - 1);
-    if (bytes_received > 0) {
-        nob_log(INFO, "Received %ld bytes", bytes_received);
-        printf("Response:\n%s\n", buffer);
-    } else {
-        nob_log(INFO, "Received %ld bytes", bytes_received);
+    while (bytes_received < 2048 && try_counter < 10) {
+        try_counter++;
+        if (bytes_received < 0) {
+            nob_log(ERROR, "Cannot read from site");
+            return_defer(1);
+        }
+        bytes_received = SSL_read(ssl, buffer, sizeof(buffer) - 1);
+    }
+    if (bytes_received < 2048) {
+        nob_log(ERROR, "Reading from the site succeeded, but the required data did not arrive");
+        return_defer(1);
     }
 
-    freeaddrinfo(addr);
-    close(client_fd);
+    nob_log(INFO, "Received %ld bytes", bytes_received);
+    printf("Response:\n%s\n", buffer);
+    nob_log(INFO, "Receiving info took %d tries", try_counter+1);
 
-	return 0;
+defer:
+    if (addr != NULL) freeaddrinfo(addr);
+    if (client_fd != 0) close(client_fd);
+    if (ssl) SSL_free(ssl);
+    if (ctx) SSL_CTX_free(ctx);
+	return result;
 }
