@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <openssl/ssl.h>
@@ -25,6 +26,35 @@ static char buffer[RESP_BUFF_LEN] = {0};
 #ifndef DEBUG
     #define nob_log(...)
 #endif
+
+bool extract_value(const char *fulldata, const char*searchstr, double *val) {
+    const char *start = strstr(fulldata, searchstr);
+    if (start == NULL) {
+        nob_log(ERROR, "Could not find relevant details in the data");
+        return false;
+    }
+    char *value_str = strstr(start, "\"value\"");
+    if (value_str == NULL) {
+        nob_log(ERROR, "Could not find relevant details in the data");
+        return false;
+    }
+    if (strlen(value_str) < 9) {
+        nob_log(ERROR, "Could not find relevant details in the data");
+        return false;
+    }
+    value_str += 7;
+    while (strlen(value_str) > 0 && (value_str[0]==':' || value_str[0]==' ')) {
+        value_str++;
+    }
+    char *endptr;
+    *val = strtod(value_str, &endptr);
+    if (endptr == value_str) {
+        nob_log(ERROR, "Could not find relevant details in the data");
+        return false;
+    }
+
+    return true;
+}
 
 bool init_openssl(SSL_CTX **ctx) {
     SSL_library_init();
@@ -148,8 +178,16 @@ int main(void) {
     }
 
     nob_log(INFO, "Received %ld bytes", bytes_received);
-    printf("Response:\n%s\n", buffer);
+    // printf("Response:\n%s\n", buffer);
     nob_log(INFO, "Receiving info took %d tries", try_counter+1);
+
+    double r3_value, r1_value, spf_value;
+    if (!extract_value(buffer, R3_ATTR_NAME, &r3_value)) return_defer(1);
+    if (!extract_value(buffer, R1_ATTR_NAME, &r1_value)) return_defer(1);
+    if (!extract_value(buffer, SPF_ATTR_NAME, &spf_value)) return_defer(1);
+    printf("| R3 %0.1f mA | ", r3_value * 1000);
+    printf("R1 %0.1f mA | ", r1_value * 1000);
+    printf("SPF %0.1f pC\n", spf_value * 1000 * 1000 * 1000 * 1000);
 
 defer:
     if (addr != NULL) freeaddrinfo(addr);
@@ -158,3 +196,4 @@ defer:
     if (ctx) SSL_CTX_free(ctx);
 	return result;
 }
+
