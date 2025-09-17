@@ -137,16 +137,16 @@ defer:
 bool extract_value(const char *fulldata, const char*searchstr, double *val) {
     const char *start = strstr(fulldata, searchstr);
     if (start == NULL) {
-        nob_log(ERROR, "Could not find relevant details in the data");
+        nob_log(ERROR, "Could not find \"%s\" in the data", searchstr);
         return false;
     }
     char *value_str = strstr(start, "\"value\"");
     if (value_str == NULL) {
-        nob_log(ERROR, "Could not find relevant details in the data");
+        nob_log(ERROR, "Could not find an associated \"value\" node in the data");
         return false;
     }
     if (strlen(value_str) < 9) {
-        nob_log(ERROR, "Could not find relevant details in the data");
+        nob_log(ERROR, "It appears that the transmisison was cut short");
         return false;
     }
     value_str += 7;
@@ -156,7 +156,7 @@ bool extract_value(const char *fulldata, const char*searchstr, double *val) {
     char *endptr;
     *val = strtod(value_str, &endptr);
     if (endptr == value_str) {
-        nob_log(ERROR, "Could not find relevant details in the data");
+        nob_log(ERROR, "Could not find a numerical value associated with \"%s\"", searchstr);
         return false;
     }
 
