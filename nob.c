@@ -4,6 +4,8 @@
 #define NOB_EXPERIMENTAL_DELETE_OLD
 #include "src/nob.h"
 
+#define BINNAME "maxiv_status"
+
 #define SRCDIR "src"
 #define BINDIR "bin"
 
@@ -19,7 +21,7 @@ int main(int argc, char **argv) {
 
     cmd_append(&cmd, "cc");
     cmd_append(&cmd, CFLAGS);
-    cmd_append(&cmd, "-o", BINDIR"/main");
+    cmd_append(&cmd, "-o", BINDIR"/"BINNAME);
     cmd_append(&cmd, SRCDIR"/main.c");
     cmd_append(&cmd, LIBS);
     cmd_run(&cmd);
@@ -29,7 +31,7 @@ int main(int argc, char **argv) {
     if (argc > 0) {
         const char *arg = shift_args(&argc, &argv);
         if (strcmp(arg, "run") == 0) {
-            cmd_append(&cmd, "./"BINDIR"/main");
+            cmd_append(&cmd, "./"BINDIR"/"BINNAME);
             cmd_run(&cmd);
         } else {
             nob_log(ERROR, "Argument not recognised: %s", arg);
