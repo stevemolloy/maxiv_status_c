@@ -1,9 +1,4 @@
-#include <stdbool.h>
 #include <netdb.h>
-#include <netinet/in.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
@@ -23,54 +18,8 @@
 #define RESP_BUFF_LEN 65536
 static char buffer[RESP_BUFF_LEN] = {0};
 
-#ifndef DEBUG
-    #define nob_log(...)
-#endif
-
-bool extract_value(const char *fulldata, const char*searchstr, double *val) {
-    const char *start = strstr(fulldata, searchstr);
-    if (start == NULL) {
-        nob_log(ERROR, "Could not find relevant details in the data");
-        return false;
-    }
-    char *value_str = strstr(start, "\"value\"");
-    if (value_str == NULL) {
-        nob_log(ERROR, "Could not find relevant details in the data");
-        return false;
-    }
-    if (strlen(value_str) < 9) {
-        nob_log(ERROR, "Could not find relevant details in the data");
-        return false;
-    }
-    value_str += 7;
-    while (strlen(value_str) > 0 && (value_str[0]==':' || value_str[0]==' ')) {
-        value_str++;
-    }
-    char *endptr;
-    *val = strtod(value_str, &endptr);
-    if (endptr == value_str) {
-        nob_log(ERROR, "Could not find relevant details in the data");
-        return false;
-    }
-
-    return true;
-}
-
-bool init_openssl(SSL_CTX **ctx) {
-    SSL_library_init();
-    SSL_load_error_strings();
-    OpenSSL_add_all_algorithms();
-
-    // Create SSL context
-    const SSL_METHOD *method = TLS_client_method();
-    *ctx = SSL_CTX_new(method);
-    if (!(*ctx)) {
-        nob_log(ERROR, "Unable to create SSL context");
-        ERR_print_errors_fp(stderr);
-        return false;
-    }
-    return true;
-}
+bool extract_value(const char *fulldata, const char*searchstr, double *val);
+bool init_openssl(SSL_CTX **ctx);
 
 int main(void) {
     int result = 0;
@@ -115,8 +64,6 @@ int main(void) {
         return_defer(1);
     }
 
-    nob_log(INFO, "IP address of %s is %s", host, ip_str);
-
     // Initialize OpenSSL
     if (!init_openssl(&ctx)) return_defer(1);
 
@@ -124,8 +71,6 @@ int main(void) {
         nob_log(ERROR, "Unable to connect to %s (%s)", host, ip_str);
         return_defer(1);
     }
-
-    nob_log(INFO, "Connected successfully to %s (%s)", host, ip_str);
 
     // Create SSL connection
     ssl = SSL_new(ctx);
@@ -140,8 +85,6 @@ int main(void) {
         ERR_print_errors_fp(stderr);
         return_defer(1);
     }
-
-    nob_log(INFO, "SSL connection established successfully");
 
     char http_request[1024];
     snprintf(http_request, sizeof(http_request),
@@ -160,8 +103,6 @@ int main(void) {
         return_defer(1);
     }
 
-    nob_log(INFO, "Sent data to %s (%s)", host, ip_str);
-
     int try_counter = 0;
     ssize_t bytes_received = SSL_read(ssl, buffer, sizeof(buffer) - 1);
     while (bytes_received < 2048 && try_counter < 10) {
@@ -177,10 +118,6 @@ int main(void) {
         return_defer(1);
     }
 
-    nob_log(INFO, "Received %ld bytes", bytes_received);
-    // printf("Response:\n%s\n", buffer);
-    nob_log(INFO, "Receiving info took %d tries", try_counter+1);
-
     double r3_value, r1_value, spf_value;
     if (!extract_value(buffer, R3_ATTR_NAME, &r3_value)) return_defer(1);
     if (!extract_value(buffer, R1_ATTR_NAME, &r1_value)) return_defer(1);
@@ -195,5 +132,50 @@ defer:
     if (ssl) SSL_free(ssl);
     if (ctx) SSL_CTX_free(ctx);
 	return result;
+}
+
+bool extract_value(const char *fulldata, const char*searchstr, double *val) {
+    const char *start = strstr(fulldata, searchstr);
+    if (start == NULL) {
+        nob_log(ERROR, "Could not find relevant details in the data");
+        return false;
+    }
+    char *value_str = strstr(start, "\"value\"");
+    if (value_str == NULL) {
+        nob_log(ERROR, "Could not find relevant details in the data");
+        return false;
+    }
+    if (strlen(value_str) < 9) {
+        nob_log(ERROR, "Could not find relevant details in the data");
+        return false;
+    }
+    value_str += 7;
+    while (strlen(value_str) > 0 && (value_str[0]==':' || value_str[0]==' ')) {
+        value_str++;
+    }
+    char *endptr;
+    *val = strtod(value_str, &endptr);
+    if (endptr == value_str) {
+        nob_log(ERROR, "Could not find relevant details in the data");
+        return false;
+    }
+
+    return true;
+}
+
+bool init_openssl(SSL_CTX **ctx) {
+    SSL_library_init();
+    SSL_load_error_strings();
+    OpenSSL_add_all_algorithms();
+
+    // Create SSL context
+    const SSL_METHOD *method = TLS_client_method();
+    *ctx = SSL_CTX_new(method);
+    if (!(*ctx)) {
+        nob_log(ERROR, "Unable to create SSL context");
+        ERR_print_errors_fp(stderr);
+        return false;
+    }
+    return true;
 }
 
