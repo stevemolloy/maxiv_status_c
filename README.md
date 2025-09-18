@@ -13,3 +13,6 @@ $ ./build
 $ ./bin/maxiv_status
 | R3 368.8 mA | R1 498.7 mA | SPF 143.8 pC
 ```
+
+Note that you need openssl and crypto libraries to be available in the include and linking paths.
+
