@@ -6,8 +6,8 @@ Can be useful as part of a tmux status bar.
 
 # Quick start
 ```console
-$ cc -o nob nob.c
-$ ./nob
+$ cc -o build build.c
+$ ./build
 [INFO] created directory `bin`
 [INFO] CMD: cc -Wall -Wextra -Wshadow -Wvla -ggdb -o bin/maxiv_status src/main.c -lssl -lcrypto
 $ ./bin/maxiv_status
