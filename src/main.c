@@ -23,7 +23,6 @@ bool init_openssl(SSL_CTX **ctx);
 
 int main(void) {
     int result = 0;
-    const char *host = HOST;
     struct addrinfo *addr = NULL;
     SSL *ssl = NULL;
     SSL_CTX *ctx = NULL;
@@ -41,10 +40,10 @@ int main(void) {
         .ai_protocol = IPPROTO_TCP,
     };
 
-    int retval = getaddrinfo(host, PORT, &hints, &addr);
+    int retval = getaddrinfo(HOST, PORT, &hints, &addr);
 
     if (retval != 0) {
-        nob_log(ERROR, "Couldn't get IP info on the URL: %s", host);
+        nob_log(ERROR, "Couldn't get IP info on the URL: %s", HOST);
         return_defer(1);
     }
 
@@ -68,7 +67,7 @@ int main(void) {
     if (!init_openssl(&ctx)) return_defer(1);
 
     if (connect(client_fd, addr->ai_addr, addr->ai_addrlen) < 0) {
-        nob_log(ERROR, "Unable to connect to %s (%s)", host, ip_str);
+        nob_log(ERROR, "Unable to connect to %s (%s)", HOST, ip_str);
         return_defer(1);
     }
 
@@ -77,7 +76,7 @@ int main(void) {
     SSL_set_fd(ssl, client_fd);
 
     // Set hostname for SNI (Server Name Indication)
-    SSL_set_tlsext_host_name(ssl, host);
+    SSL_set_tlsext_host_name(ssl, HOST);
 
     // Perform SSL handshake
     if (SSL_connect(ssl) <= 0) {
@@ -93,7 +92,7 @@ int main(void) {
         "Connection: close\r\n"
         "\r\n",
         PATH,
-        host
+        HOST
     );
 
     // Send request via SSL
