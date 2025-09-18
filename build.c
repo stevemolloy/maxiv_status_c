@@ -37,11 +37,11 @@ int main(int argc, char **argv) {
     cmd_append(&cmd, "-o", BINDIR"/"BINNAME);
     cmd_append(&cmd, SRCDIR"/main.c");
     cmd_append(&cmd, LIBS);
-    cmd_run(&cmd);
+    if (!cmd_run(&cmd)) return 1;
 
     if (run_exe) {
         cmd_append(&cmd, "./"BINDIR"/"BINNAME);
-        cmd_run(&cmd);
+        if (!cmd_run(&cmd)) return 1;
     }
 
     return 0;
