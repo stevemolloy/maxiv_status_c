@@ -1,6 +1,8 @@
+#include <alloca.h>
 #include <netdb.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <string.h>
 
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
@@ -20,6 +22,7 @@ static char buffer[RESP_BUFF_LEN] = {0};
 
 bool extract_value(const char *fulldata, const char*searchstr, double *val);
 bool init_openssl(SSL_CTX **ctx);
+bool get_ip_str(const char* host, const char *port, struct addrinfo **addr, char **ip_str);
 
 int main(void) {
     int result = 0;
@@ -33,35 +36,9 @@ int main(void) {
         return_defer(1);
     }
 
-    struct addrinfo hints = {
-        .ai_flags = 0 | AI_CANONNAME,
-        .ai_family = AF_INET,
-        .ai_socktype = SOCK_STREAM,
-        .ai_protocol = IPPROTO_TCP,
-    };
-
-    int retval = getaddrinfo(HOST, PORT, &hints, &addr);
-
-    if (retval != 0) {
-        nob_log(ERROR, "Couldn't get IP info on the URL: %s", HOST);
-        return_defer(1);
-    }
-
-    char ip_str[NI_MAXHOST];
-    int gni_result = getnameinfo(
-        addr->ai_addr,
-        addr->ai_addrlen,
-        ip_str,
-        NI_MAXHOST,
-        NULL,
-        0,
-        NI_NUMERICHOST
-    );
-
-    if (gni_result != 0) {
-        nob_log(ERROR, "Could not get IP string from URL info");
-        return_defer(1);
-    }
+    char *ip_str = alloca(NI_MAXHOST);
+    memset(ip_str, 0, NI_MAXHOST);
+    if (!get_ip_str(HOST, PORT, &addr, &ip_str)) return_defer(1);
 
     // Initialize OpenSSL
     if (!init_openssl(&ctx)) return_defer(1);
@@ -85,7 +62,7 @@ int main(void) {
         return_defer(1);
     }
 
-    char http_request[1024];
+    char http_request[1024] = {0};
     snprintf(http_request, sizeof(http_request),
         "GET %s HTTP/1.1\r\n"
         "Host: %s\r\n"
@@ -175,6 +152,39 @@ bool init_openssl(SSL_CTX **ctx) {
         ERR_print_errors_fp(stderr);
         return false;
     }
+    return true;
+}
+
+bool get_ip_str(const char* host, const char *port, struct addrinfo **addr, char **ip_str) {
+    struct addrinfo hints = {
+        .ai_flags = AI_CANONNAME,
+        .ai_family = AF_INET,
+        .ai_socktype = SOCK_STREAM,
+        .ai_protocol = IPPROTO_TCP,
+    };
+
+    int retval = getaddrinfo(host, port, &hints, addr);
+
+    if (retval != 0) {
+        nob_log(ERROR, "Couldn't get IP info on the URL: %s", HOST);
+        return false;
+    }
+
+    int gni_result = getnameinfo(
+        (*addr)->ai_addr,
+        (*addr)->ai_addrlen,
+        *ip_str,
+        NI_MAXHOST,
+        NULL,
+        0,
+        NI_NUMERICHOST
+    );
+
+    if (gni_result != 0) {
+        nob_log(ERROR, "Could not get IP string from URL info");
+        return false;
+    }
+
     return true;
 }
 
