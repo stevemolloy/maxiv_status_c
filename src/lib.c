@@ -36,10 +36,6 @@ bool extract_value(const char *fulldata, const char*searchstr, double *val) {
 }
 
 bool init_openssl(SSL_CTX **ctx) {
-    SSL_library_init();
-    SSL_load_error_strings();
-    OpenSSL_add_all_algorithms();
-
     // Create SSL context
     const SSL_METHOD *method = TLS_client_method();
     *ctx = SSL_CTX_new(method);
