@@ -81,20 +81,26 @@ bool get_ip_str(const char* host, const char *port, struct addrinfo **addr, char
 }
 
 bool prep_SSL_connection(SSL_CTX *ctx, SSL **ssl, int client_fd, const char *host) {
-    // Create SSL connection
+    // Set verification mode
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+    SSL_CTX_set_default_verify_paths(ctx);
+    
     *ssl = SSL_new(ctx);
     SSL_set_fd(*ssl, client_fd);
-
-    // Set hostname for SNI (Server Name Indication)
     SSL_set_tlsext_host_name(*ssl, host);
-
-    // Perform SSL handshake
+    
     if (SSL_connect(*ssl) <= 0) {
         nob_log(ERROR, "SSL connection failed");
         ERR_print_errors_fp(stderr);
         return false;
     }
-
+    
+    // Verify the certificate
+    if (SSL_get_verify_result(*ssl) != X509_V_OK) {
+        nob_log(ERROR, "Certificate verification failed");
+        return false;
+    }
+    
     return true;
 }
 
