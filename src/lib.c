@@ -22,9 +22,16 @@ bool extract_value(const char *fulldata, const char*searchstr, double *val) {
         return false;
     }
     value_str += 7;
-    while (strlen(value_str) > 0 && (value_str[0]==':' || value_str[0]==' ')) {
+    size_t length = strlen(value_str);
+    while (length > 0 && (value_str[0]==':' || value_str[0]==' ')) {
         value_str++;
+        length--;
     }
+    if (length == 0) {
+        nob_log(ERROR, "Could not find a numerical value associated with \"%s\"", searchstr);
+        return false;
+    }
+
     char *endptr;
     *val = strtod(value_str, &endptr);
     if (endptr == value_str) {
