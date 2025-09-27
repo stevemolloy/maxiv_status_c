@@ -1,4 +1,3 @@
-#include <alloca.h>
 #include <netdb.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -24,6 +23,9 @@
 #define RESP_BUFF_LEN 65536
 static char buffer[RESP_BUFF_LEN] = {0};
 
+static char ip_str_buffer[NI_MAXHOST] = {0};
+char *ip_str = ip_str_buffer;
+
 int main(void) {
     int result = 0;
     struct addrinfo *addr = NULL;
@@ -36,7 +38,6 @@ int main(void) {
         return_defer(1);
     }
 
-    char *ip_str = alloca(NI_MAXHOST);
     memset(ip_str, 0, NI_MAXHOST);
     if (!get_ip_str(HOST, PORT, &addr, &ip_str)) return_defer(1);
 
