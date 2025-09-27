@@ -13,6 +13,11 @@
 #define R1_ATTR_NAME  "R1-101S/DIA/DCCT-01/CURRENT"
 #define R3_ATTR_NAME  "R3-319S2/DIA/DCCT-01/CURRENT"
 
+#define MIN_EXPECTED_RESPONSE_SIZE 2048
+#define MAX_READ_RETRIES 10
+#define AMPS_TO_MILLIAMPS 1e3
+#define C_TO_PICOC 1e12
+
 #define HOST "status.maxiv.lu.se"
 #define PATH "/stream"
 #define URL "https://"HOST PATH
@@ -59,7 +64,7 @@ int main(void) {
 
     int try_counter = 0;
     ssize_t bytes_received = SSL_read(ssl, buffer, RESP_BUFF_LEN - 1);
-    while (bytes_received < 2048 && try_counter++ < 10) {
+    while (bytes_received < MIN_EXPECTED_RESPONSE_SIZE && try_counter++ < MAX_READ_RETRIES) {
         if (bytes_received < 0) {
             nob_log(ERROR, "Cannot read from site");
             return_defer(1);
@@ -67,7 +72,7 @@ int main(void) {
         bytes_received = SSL_read(ssl, buffer, RESP_BUFF_LEN - 1);
     }
 
-    if (bytes_received < 2048) {
+    if (bytes_received < MIN_EXPECTED_RESPONSE_SIZE) {
         nob_log(ERROR, "Reading from the site succeeded, but the required data did not arrive");
         return_defer(1);
     }
@@ -76,7 +81,7 @@ int main(void) {
     if (!extract_value(buffer, R3_ATTR_NAME, &r3_value)) return_defer(1);
     if (!extract_value(buffer, R1_ATTR_NAME, &r1_value)) return_defer(1);
     if (!extract_value(buffer, SPF_ATTR_NAME, &spf_value)) return_defer(1);
-    printf("| R3 %0.1f mA | R1 %0.1f mA | SPF %0.1f pC\n", r3_value*1e3, r1_value*1e3, spf_value*1e12);
+    printf("| R3 %0.1f mA | R1 %0.1f mA | SPF %0.1f pC\n", r3_value*AMPS_TO_MILLIAMPS, r1_value*AMPS_TO_MILLIAMPS, spf_value*C_TO_PICOC);
 
 defer:
     if (addr != NULL) freeaddrinfo(addr);
